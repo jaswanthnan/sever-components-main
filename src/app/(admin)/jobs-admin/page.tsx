@@ -1,104 +1,116 @@
-import React, { Suspense } from 'react';
-import type { Metadata } from 'next';
-import dbConnect from '@/lib/mongodb';
-import Job from '@/lib/models/Job';
-import JobTable from '@/components/jobs/JobTable';
-import JobFilters from '@/components/jobs/JobFilters';
-import { Plus } from 'lucide-react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Skeleton } from '@/components/ui/Skeleton';
-import type { AdminJobRecord } from '@/components/jobs/JobTable';
+import { Plus, Briefcase } from 'lucide-react';
+import JobFilters from '../../../components/jobs/JobFilters';
+import JobTable from '../../../components/jobs/JobTable';
+import type { Job } from '@/types';
 
-export const metadata: Metadata = {
-  title: 'Manage Jobs',
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+export default function JobsAdminPage() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-function JobsTableSkeleton() {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm w-full animate-in fade-in duration-300">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-4 w-20" />
-        <Skeleton className="h-4 w-24" />
-      </div>
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center justify-between py-3 border-b border-slate-55 dark:border-slate-800/50 last:border-0 animate-pulse">
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-6 w-16 rounded-full" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
-        </div>
-      ))}
-    </div>
-  );
-}
+  // Filters State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('All');
+  const [selectedDepartment, setSelectedDepartment] = useState('All');
 
-type JobSearchParams = {
-  status?: string;
-  type?: string;
-};
+  const fetchJobs = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/jobs');
+      if (!res.ok) throw new Error('Failed to fetch jobs');
+      const data = await res.json();
+      setJobs(data);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-async function JobTableWrapper({ params }: { params: JobSearchParams }) {
-  await dbConnect();
+  useEffect(() => {
+    fetchJobs();
+  }, []);
 
-  const query: Record<string, string> = {};
-  if (params.status) query.status = params.status;
-  if (params.type) query.type = params.type;
+  const handleDeleteJob = async (id: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete job');
+      
+      // Update local state
+      setJobs((prev) => prev.filter((job) => job._id !== id));
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
 
-  const jobs = await Job.find(query).sort({ createdAt: -1 }).lean();
+  // Client-side filtering logic
+  const filteredJobs = jobs.filter((job) => {
+    const matchesSearch = 
+      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.location.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesType = selectedType === 'All' || job.type === selectedType;
+    const matchesDepartment = selectedDepartment === 'All' || job.department === selectedDepartment;
 
-  const formattedJobs: AdminJobRecord[] = jobs.map((job: any) => ({
-    _id: job._id.toString(),
-    title: job.title,
-    department: job.department,
-    location: job.location,
-    type: job.type,
-    status: job.status,
-    salaryRange: job.salaryRange || '',
-    createdAt: job.createdAt.toISOString(),
-  }));
-
-  return <JobTable initialData={formattedJobs} />;
-}
-
-export default async function JobsAdminPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | undefined }>;
-}) {
-  const params = await searchParams;
+    return matchesSearch && matchesType && matchesDepartment;
+  });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Active Job Openings</h2>
-          <p className="text-xs text-slate-500 mt-1">Manage and track your published positions on the HireSync Careers page.</p>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-indigo-600 dark:text-indigo-400">
+              <Briefcase className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Manage Job Postings
+            </h1>
+          </div>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-2xl text-sm font-medium">
+            Create, modify, and manage career opportunities displayed on the public careers portal.
+          </p>
         </div>
+
         <Link
           href="/jobs-admin/new"
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-semibold transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 cursor-pointer"
+          className="flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 dark:bg-white dark:hover:bg-slate-50 text-white dark:text-slate-950 px-6 py-3.5 rounded-2xl font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
         >
           <Plus className="w-5 h-5" />
-          Post Job
+          <span>Post New Job</span>
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-1">
-          <JobFilters />
+      {/* Filters Component */}
+      <JobFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        selectedDepartment={selectedDepartment}
+        onDepartmentChange={setSelectedDepartment}
+      />
+
+      {/* Main Table / Loader State */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-sm gap-3">
+          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Loading job postings...</span>
         </div>
-        <div className="lg:col-span-3">
-          <Suspense fallback={<JobsTableSkeleton />} key={`${params.status}-${params.type}`}>
-            <JobTableWrapper params={params} />
-          </Suspense>
+      ) : error ? (
+        <div className="p-8 text-center bg-rose-50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/20 text-rose-600 dark:text-rose-400 rounded-[2.5rem]">
+          <p className="font-bold text-lg">Error Loading Jobs</p>
+          <p className="text-sm mt-1">{error}</p>
         </div>
-      </div>
+      ) : (
+        <JobTable jobs={filteredJobs} onDelete={handleDeleteJob} />
+      )}
     </div>
   );
 }
