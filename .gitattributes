@@ -1,0 +1,15 @@
+# Set default behavior to normalize line endings to LF on commit,
+# and checkout as platform-native line endings (CRLF on Windows, LF on Mac/Linux)
+* text=auto
+
+# Explicitly declare text files that should always use LF line endings
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+.gitignore text eol=lf
+.env* text eol=lf
