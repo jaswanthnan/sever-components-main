@@ -3,11 +3,13 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CandidateForm from '../CandidateForm';
-import { createCandidate } from '@/lib/actions/candidate-actions';
+import { candidateApi } from '@/lib/api/candidates';
 
-// Mock the Server Actions file
-vi.mock('@/lib/actions/candidate-actions', () => ({
-  createCandidate: vi.fn(),
+// Mock the API client
+vi.mock('@/lib/api/candidates', () => ({
+  candidateApi: {
+    create: vi.fn(),
+  },
 }));
 
 describe('CandidateForm Component', () => {
@@ -62,20 +64,28 @@ describe('CandidateForm Component', () => {
   });
 
   it('submits form data using mocked createCandidate server action', async () => {
-    // Mock the Server Action to return success (no error)
-    const mockCreateCandidate = vi.mocked(createCandidate);
-    mockCreateCandidate.mockImplementation(async (prevState: any, formData: FormData) => {
-      return { message: 'Candidate added successfully!', error: null };
-    });
+    const mockCreate = vi.mocked(candidateApi.create);
+    mockCreate.mockResolvedValue({
+      _id: '123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      role: 'Frontend Developer',
+      experience: 3,
+      location: 'New York',
+      status: 'Applied',
+      skills: ['React', 'TypeScript'],
+      createdAt: '2026-05-23T06:00:00Z',
+      updatedAt: '2026-05-23T06:00:00Z',
+    } as any);
 
     render(<CandidateForm />);
 
     // Fill in the form fields using placeholder text
     const nameInput = screen.getByPlaceholderText('John Doe');
     const emailInput = screen.getByPlaceholderText('john@example.com');
-    const roleSelect = screen.getByRole('combobox');
-    const expInput = screen.getByPlaceholderText('0');
-    const locInput = screen.getByPlaceholderText('New York, NY');
+    const roleSelect = screen.getAllByRole('combobox').find(el => el.getAttribute('name') === 'role')!;
+    const expInput = document.querySelector('input[name="experience"]')!;
+    const locInput = document.querySelector('input[name="location"]')!;
 
     fireEvent.change(nameInput, { target: { value: 'John Doe' } });
     fireEvent.change(emailInput, { target: { value: 'john@example.com' } });
@@ -88,27 +98,23 @@ describe('CandidateForm Component', () => {
       fireEvent.click(submitBtn);
     });
 
-    // Wait for our mocked server action to be executed
     await vi.waitFor(() => {
-      expect(mockCreateCandidate).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalled();
     });
   });
 
   it('displays error message when mocked createCandidate server action fails', async () => {
-    // Mock the Server Action to return an error response
-    const mockCreateCandidate = vi.mocked(createCandidate);
-    mockCreateCandidate.mockImplementation(async (prevState: any, formData: FormData) => {
-      return { message: null, error: 'Database connection failed' };
-    });
+    const mockCreate = vi.mocked(candidateApi.create);
+    mockCreate.mockRejectedValue(new Error('Database connection failed'));
 
     render(<CandidateForm />);
 
     // Fill in the form fields to satisfy HTML5 validation
     const nameInput = screen.getByPlaceholderText('John Doe');
     const emailInput = screen.getByPlaceholderText('john@example.com');
-    const roleSelect = screen.getByRole('combobox');
-    const expInput = screen.getByPlaceholderText('0');
-    const locInput = screen.getByPlaceholderText('New York, NY');
+    const roleSelect = screen.getAllByRole('combobox').find(el => el.getAttribute('name') === 'role')!;
+    const expInput = document.querySelector('input[name="experience"]')!;
+    const locInput = document.querySelector('input[name="location"]')!;
 
     fireEvent.change(nameInput, { target: { value: 'Jane Doe' } });
     fireEvent.change(emailInput, { target: { value: 'jane@example.com' } });
@@ -121,9 +127,12 @@ describe('CandidateForm Component', () => {
       fireEvent.click(submitBtn);
     });
 
-    // Wait for the action to execute and verify call
     await vi.waitFor(() => {
-      expect(mockCreateCandidate).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalled();
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Database connection failed')).toBeInTheDocument();
     });
   });
 });
