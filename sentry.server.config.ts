@@ -7,5 +7,5 @@ Sentry.init({
   tracesSampleRate: 1.0,
 
   // Setting this option to true will print useful information to the console regarding SDK integration.
-  debug: false,
+  debug: true,
 });

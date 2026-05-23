@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
+import * as Sentry from '@sentry/nextjs';
 
 export default function Error({
   error,
@@ -10,6 +11,10 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  React.useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   return (
     <div className="flex-1 flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center space-y-6 bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl">
