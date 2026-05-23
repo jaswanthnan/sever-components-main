@@ -1,44 +1,27 @@
 import { create } from 'zustand';
-import { persist, devtools } from 'zustand/middleware';
-import { Candidate } from '../types';
+import { devtools, persist } from 'zustand/middleware';
 
 interface CandidateState {
-  // Modal & Selection State
-  isModalVisible: boolean;
-  editingCandidate: Candidate | null;
-
-  // Filter & Search State
+  selectedCandidateId: string | null;
   searchTerm: string;
   activeFilters: Record<string, string[]>;
-
-  // Actions
-  openModal: (candidate?: Candidate) => void;
-  closeModal: () => void;
+  selectedRows: string[];
   setSearchTerm: (term: string) => void;
   setFilters: (filters: Record<string, string[]>) => void;
   clearFilters: () => void;
+  setSelectedCandidateId: (id: string | null) => void;
+  toggleSelectedRow: (id: string) => void;
+  clearSelectedRows: () => void;
 }
 
 export const useCandidateStore = create<CandidateState>()(
   devtools(
     persist(
       (set) => ({
-        isModalVisible: false,
-        editingCandidate: null,
+        selectedCandidateId: null,
         searchTerm: '',
         activeFilters: {},
-
-        openModal: (candidate) => set(
-          { isModalVisible: true, editingCandidate: candidate || null },
-          false,
-          'openModal'
-        ),
-
-        closeModal: () => set(
-          { isModalVisible: false, editingCandidate: null },
-          false,
-          'closeModal'
-        ),
+        selectedRows: [],
 
         setSearchTerm: (term) => set(
           { searchTerm: term },
@@ -57,13 +40,36 @@ export const useCandidateStore = create<CandidateState>()(
           false,
           'clearFilters'
         ),
+
+        setSelectedCandidateId: (id) => set(
+          { selectedCandidateId: id },
+          false,
+          'setSelectedCandidateId'
+        ),
+
+        toggleSelectedRow: (id) => set(
+          (state) => ({
+            selectedRows: state.selectedRows.includes(id)
+              ? state.selectedRows.filter((rowId) => rowId !== id)
+              : [...state.selectedRows, id],
+          }),
+          false,
+          'toggleSelectedRow'
+        ),
+
+        clearSelectedRows: () => set(
+          { selectedRows: [] },
+          false,
+          'clearSelectedRows'
+        ),
       }),
       {
-        name: 'candidate-storage', // key in local storage
+        name: 'candidate-storage',
         partialize: (state) => ({
           searchTerm: state.searchTerm,
-          activeFilters: state.activeFilters
-        }), // Only persist search and filters
+          activeFilters: state.activeFilters,
+          selectedCandidateId: state.selectedCandidateId,
+        }),
       }
     ),
     { name: 'CandidateStore' }

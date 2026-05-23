@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, ReactElement, ReactNode } from 'react';
 
 interface TabProps {
@@ -19,8 +21,7 @@ interface TabsCloneProps {
 export const TabsClone: React.FC<TabsCloneProps> = ({ children }) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const handleTabClick = (index: number, label: string) => {
-    console.log(`%c[TabsClone]%c Switching to tab: %c${label}`, 'color: #3b82f6; font-weight: bold', 'color: inherit', 'color: #3b82f6; font-weight: bold');
+  const handleTabClick = (index: number) => {
     setActiveIndex(index);
   };
 
@@ -32,7 +33,8 @@ export const TabsClone: React.FC<TabsCloneProps> = ({ children }) => {
         {childrenArray.map((child, index) => (
           <button
             key={index}
-            onClick={() => handleTabClick(index, child.props.label)}
+            type="button"
+            onClick={() => handleTabClick(index)}
             className={`px-6 py-4 text-sm font-bold transition-all duration-300 relative ${
               activeIndex === index 
                 ? 'text-blue-600 bg-white' 

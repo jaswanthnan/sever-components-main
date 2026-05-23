@@ -35,6 +35,23 @@ export interface Candidate {
   createdAt?: string | Date;
 }
 
+export type CandidateStatusFilter = CandidateStatus | 'all';
+
+export interface CandidateListFilters {
+  status?: CandidateStatusFilter;
+}
+
+export interface CandidateWriteInput {
+  name: string;
+  email: string;
+  role: string;
+  experience: number;
+  location: string;
+  status: CandidateStatus;
+  skills: string[];
+  resumeUrl?: string;
+}
+
 export interface AppUser {
   id: string;
   name: string;

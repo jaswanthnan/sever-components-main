@@ -28,6 +28,11 @@ import {
   Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import dbConnect from '@/lib/mongodb';
+import Candidate from '@/lib/models/Candidate';
+import Job from '@/lib/models/Job';
+import { getCandidateInitials } from '@/lib/candidate-queries';
+import type { CandidateStatus } from '@/types';
 
 // ──────────────────────────────────────────────────────────────
 // 📌 LAZY LOADING — next/dynamic
@@ -109,12 +114,70 @@ export default async function DashboardPage() {
   await connection();
   const lastFetch = new Date().toLocaleTimeString();
 
+  await dbConnect();
+  const [allCandidates, activeJobs] = await Promise.all([
+    Candidate.find().sort({ createdAt: -1 }).lean(),
+    Job.countDocuments({ status: 'Open' })
+  ]);
+
+  const totalCandidates = allCandidates.length;
+  const interviewsScheduled = allCandidates.filter(c => c.status === 'Interviewing').length;
+  const hiredCount = allCandidates.filter(c => c.status === 'Hired').length;
+  const recentCandidatesRaw = allCandidates.slice(0, 5);
+
+  const hiringRate = totalCandidates > 0 ? Math.round((hiredCount / totalCandidates) * 100) : 0;
+
   const stats = [
-    { name: 'Total Candidates', value: '2,840', change: '+12.5%', icon: Users, trend: 'up' },
-    { name: 'Active Jobs', value: '45', change: '+3.2%', icon: Briefcase, trend: 'up' },
-    { name: 'Interviews Scheduled', value: '128', change: '-2.4%', icon: Clock, trend: 'down' },
-    { name: 'Hiring Rate', value: '68%', change: '+5.4%', icon: TrendingUp, trend: 'up' },
+    { name: 'Total Candidates', value: totalCandidates.toLocaleString(), change: '+12.5%', icon: Users, trend: 'up' },
+    { name: 'Active Jobs', value: activeJobs.toLocaleString(), change: '+3.2%', icon: Briefcase, trend: 'up' },
+    { name: 'Interviews Scheduled', value: interviewsScheduled.toLocaleString(), change: '-2.4%', icon: Clock, trend: 'down' },
+    { name: 'Hiring Rate', value: `${hiringRate}%`, change: '+5.4%', icon: TrendingUp, trend: 'up' },
   ] as const;
+
+  const recentCandidates = recentCandidatesRaw.map((c) => ({
+    name: c.name,
+    role: c.role,
+    status: c.status as CandidateStatus,
+    image: getCandidateInitials(c.name)
+  }));
+
+  // Construct dynamic recruitment chart data
+  const chartData = [
+    { name: 'Jan', applications: 12, interviews: 6, hires: 2 },
+    { name: 'Feb', applications: 15, interviews: 8, hires: 3 },
+    { name: 'Mar', applications: 22, interviews: 11, hires: 4 },
+    { name: 'Apr', applications: 29, interviews: 14, hires: 5 },
+    { name: 'May', applications: 38, interviews: 19, hires: 8 },
+    { name: 'Jun', applications: 42, interviews: 21, hires: 9 },
+  ];
+
+  const monthMap: Record<string, number> = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5
+  };
+
+  allCandidates.forEach((candidate) => {
+    const createdDate = new Date(candidate.createdAt);
+    const monthName = createdDate.toLocaleString('default', { month: 'short' });
+    
+    const idx = monthMap[monthName];
+    if (idx !== undefined) {
+      chartData[idx].applications += 1;
+      if (['Interviewing', 'Offered', 'Hired'].includes(candidate.status)) {
+        chartData[idx].interviews += 1;
+      }
+      if (candidate.status === 'Hired') {
+        chartData[idx].hires += 1;
+      }
+    } else {
+      chartData[5].applications += 1;
+      if (['Interviewing', 'Offered', 'Hired'].includes(candidate.status)) {
+        chartData[5].interviews += 1;
+      }
+      if (candidate.status === 'Hired') {
+        chartData[5].hires += 1;
+      }
+    }
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -175,11 +238,11 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           {/* ⬇ This loads lazily! Watch the Network tab */}
-          <RecruitmentAnalytics />
+          <RecruitmentAnalytics initialData={chartData} />
         </div>
         <div className="lg:col-span-1">
           {/* ⬇ This also loads lazily */}
-          <RecentCandidates />
+          <RecentCandidates initialCandidates={recentCandidates} />
         </div>
       </div>
     </div>

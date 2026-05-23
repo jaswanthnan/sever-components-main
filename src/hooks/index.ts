@@ -1,4 +1,4 @@
-import { useState, useEffect, RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
 /**
  * useDebounce: Returns a debounced version of the provided value.
@@ -10,7 +10,6 @@ export const useDebounce = <T>(value: T, delay: number): T => {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(value);
-      console.log(`%c [useDebounce] Value updated: ${value} `, 'background: #6366f1; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
     }, delay);
 
     return () => clearTimeout(handler);
@@ -25,15 +24,17 @@ export const useDebounce = <T>(value: T, delay: number): T => {
  */
 export const useLocalStorage = <T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] => {
   const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === 'undefined') {
+      return initialValue;
+    }
+
     try {
       const item = window.localStorage.getItem(key);
       if (item) {
-        console.log(`%c [useLocalStorage] Loaded ${key} from storage `, 'background: #10b981; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
-        return JSON.parse(item);
+        return JSON.parse(item) as T;
       }
       return initialValue;
-    } catch (error) {
-      console.error(`[useLocalStorage] Error loading ${key}:`, error);
+    } catch {
       return initialValue;
     }
   });
@@ -42,10 +43,11 @@ export const useLocalStorage = <T>(key: string, initialValue: T): [T, (value: T 
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      console.log(`%c [useLocalStorage] Saved ${key} to storage `, 'background: #059669; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
-    } catch (error) {
-      console.error(`[useLocalStorage] Error saving ${key}:`, error);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch {
+      return;
     }
   };
 
@@ -76,18 +78,19 @@ export const useFetch = <T>(url: string, options: RequestInit = {}): FetchResult
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log(`%c [useFetch] Requesting: ${url} `, 'background: #f59e0b; color: black; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
         const response = await fetch(url, { ...options, signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const json = await response.json();
+        const json = (await response.json()) as T;
         setData(json);
-        console.log(`%c [useFetch] Success: ${url} `, 'background: #3b82f6; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
+        if (err instanceof Error) {
           setError(err.message);
-          console.error(`%c [useFetch] Error: ${err.message} `, 'background: #ef4444; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
         } else {
-          console.log(`%c [useFetch] Request Aborted: ${url} `, 'background: #94a3b8; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
+          setError('Request failed');
         }
       } finally {
         setLoading(false);
@@ -95,11 +98,8 @@ export const useFetch = <T>(url: string, options: RequestInit = {}): FetchResult
     };
 
     fetchData();
-    return () => {
-      console.log(`%c [useFetch] Cleaning up (Aborting): ${url} `, 'background: #475569; color: white; padding: 2px 4px; border-radius: 4px;');
-      controller.abort();
-    };
-  }, [url, toggle]);
+    return () => controller.abort();
+  }, [options, toggle, url]);
 
   return { data, loading, error, refetch };
 };
@@ -119,20 +119,11 @@ export const useIntersectionObserver = (
 
     const observer = new IntersectionObserver(([entry]) => {
       setIntersecting(entry.isIntersecting);
-      if (entry.isIntersecting) {
-        console.log(`%c [useIntersectionObserver] Element visible! `, 'background: #ec4899; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold;');
-      } else {
-        console.log(`%c [useIntersectionObserver] Element hidden! `, 'background: #9d174d; color: white; padding: 2px 4px; border-radius: 4px;');
-      }
     }, options);
 
     observer.observe(ref.current);
-    return () => {
-      console.log('%c [useIntersectionObserver] Disconnecting observer ', 'background: #475569; color: white; padding: 2px 4px; border-radius: 4px;');
-      observer.disconnect();
-    };
-  }, [ref, options]);
+    return () => observer.disconnect();
+  }, [options, ref]);
 
   return isIntersecting;
 };
-

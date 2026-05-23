@@ -30,8 +30,9 @@ const wrappedConfig = process.env.ANALYZE === 'true'
 export default withSentryConfig(wrappedConfig, {
   // Suppresses source map uploading logs during profiling
   silent: true,
-  org: "hiresync",
-  project: "recruitment-crm",
+  org: "hiresync-crm",
+  project: "javascript-nextjs",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 
   // Upload a larger set of source maps for prettier stack traces
   widenClientFileUpload: true,

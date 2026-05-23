@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+'use client';
+
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface FilterContextType {
   filters: Record<string, string[]>;
@@ -32,8 +34,6 @@ export const FilterPanel: React.FC<FilterPanelProps> & {
   const filters = value !== undefined ? value : internalFilters;
 
   const toggleFilter = (group: string, val: string) => {
-    console.log(`%c[FilterPanel]%c Toggling %c${val}%c in group %c${group}`, 'color: #10b981; font-weight: bold', 'color: inherit', 'color: #3b82f6; font-weight: bold', 'color: inherit', 'color: #3b82f6; font-weight: bold');
-    
     const currentGroup = filters[group] || [];
     const isRemoving = currentGroup.includes(val);
     const newGroup = isRemoving
@@ -47,8 +47,9 @@ export const FilterPanel: React.FC<FilterPanelProps> & {
   };
 
   const clearGroup = (group: string) => {
-    console.log(`%c[FilterPanel]%c Clearing group: %c${group}`, 'color: #f59e0b; font-weight: bold', 'color: inherit', 'color: #f59e0b; font-weight: bold');
-    const { [group]: _, ...rest } = filters;
+    const rest = Object.fromEntries(
+      Object.entries(filters).filter(([key]) => key !== group)
+    ) as Record<string, string[]>;
     if (value === undefined) setInternalFilters(rest);
     if (onChange) onChange(rest);
   };
@@ -64,6 +65,7 @@ export const FilterPanel: React.FC<FilterPanelProps> & {
         <div className="flex justify-between items-center border-b border-slate-100 pb-4">
           <h3 className="font-bold text-slate-800">Filters</h3>
           <button 
+            type="button"
             onClick={clearAll}
             className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
           >
@@ -78,7 +80,7 @@ export const FilterPanel: React.FC<FilterPanelProps> & {
 
 const Group: React.FC<{ name: string; title: string; children: ReactNode }> = ({ name, title, children }) => {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-group={name}>
       <div className="flex justify-between items-center">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">{title}</h4>
       </div>
@@ -95,6 +97,7 @@ const Item: React.FC<{ group: string; value: string; children: ReactNode }> = ({
 
   return (
     <button
+      type="button"
       onClick={() => toggleFilter(group, value)}
       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
         isActive
@@ -111,6 +114,7 @@ const ClearButton: React.FC<{ group?: string; children: ReactNode }> = ({ group,
   const { clearGroup, clearAll } = useFilters();
   return (
     <button 
+      type="button"
       onClick={() => group ? clearGroup(group) : clearAll()}
       className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
     >

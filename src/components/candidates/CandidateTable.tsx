@@ -1,121 +1,236 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { 
-  ColDef, 
-  ICellRendererParams,
-  ModuleRegistry
-} from 'ag-grid-community';
-import { AllCommunityModule } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
+import { AllCommunityModule, ColDef, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ExternalLink, Trash2 } from 'lucide-react';
-import { deleteCandidate } from '@/lib/actions/candidate-actions';
-import type { Candidate, CandidateStatus } from '@/types';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
+import { candidateApi } from '@/lib/api/candidates';
+import {
+  candidateQueryKeys,
+  fetchCandidates,
+  getCandidateInitials,
+} from '@/lib/candidate-queries';
+import { useCandidateStore } from '@/store/candidateStore';
+import type { Candidate, CandidateStatus, CandidateStatusFilter } from '@/types';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 interface CandidateTableProps {
-  initialData: Candidate[];
+  status: CandidateStatusFilter;
 }
 
-export default function CandidateTable({ initialData }: CandidateTableProps) {
+function filterCandidates(candidates: Candidate[], searchTerm: string) {
+  if (!searchTerm.trim()) {
+    return candidates;
+  }
+
+  const query = searchTerm.toLowerCase();
+  return candidates.filter((candidate) => {
+    return (
+      candidate.name.toLowerCase().includes(query) ||
+      candidate.email.toLowerCase().includes(query) ||
+      candidate.role.toLowerCase().includes(query) ||
+      candidate.location.toLowerCase().includes(query) ||
+      candidate.skills.some((skill) => skill.toLowerCase().includes(query))
+    );
+  });
+}
+
+export default function CandidateTable({ status }: CandidateTableProps) {
   const router = useRouter();
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const queryClient = useQueryClient();
+  const searchTerm = useCandidateStore((state) => state.searchTerm);
+  const selectedRows = useCandidateStore((state) => state.selectedRows);
+  const toggleSelectedRow = useCandidateStore((state) => state.toggleSelectedRow);
+  const setSelectedCandidateId = useCandidateStore((state) => state.setSelectedCandidateId);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  const { data: candidates = [], isLoading, isError, error } = useQuery({
+    queryKey: candidateQueryKeys.list(status),
+    queryFn: () => fetchCandidates(status),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (candidateId: string) => candidateApi.delete(candidateId),
+    onMutate: async (candidateId) => {
+      await queryClient.cancelQueries({ queryKey: candidateQueryKeys.all });
+
+      const previousLists = queryClient.getQueriesData<Candidate[]>({
+        queryKey: candidateQueryKeys.all,
+      });
+
+      previousLists.forEach(([queryKey, list]) => {
+        if (!list) {
+          return;
+        }
+
+        queryClient.setQueryData<Candidate[]>(
+          queryKey,
+          list.filter((candidate) => candidate._id !== candidateId)
+        );
+      });
+
+      return { previousLists };
+    },
+    onError: (_error, _candidateId, context) => {
+      context?.previousLists.forEach(([queryKey, list]) => {
+        queryClient.setQueryData(queryKey, list);
+      });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: candidateQueryKeys.all });
+    },
+  });
+
   const rowData = useMemo(
-    () => initialData.filter((candidate) => !deletedIds.includes(candidate._id)),
-    [deletedIds, initialData]
+    () => filterCandidates(candidates, deferredSearchTerm),
+    [candidates, deferredSearchTerm]
   );
 
-  const columnDefs = useMemo<ColDef[]>(() => [
-    { 
-      field: 'name', 
-      headerName: 'Candidate',
-      flex: 2,
-      cellRenderer: (params: ICellRendererParams) => (
-        <div className="flex items-center gap-3 h-full">
-          <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-            {params.data.name.split(' ').map((n: string) => n[0]).join('')}
+  const columnDefs = useMemo<ColDef<Candidate>[]>(
+    () => [
+      {
+        field: 'name',
+        headerName: 'Candidate',
+        flex: 2,
+        cellRenderer: (params: ICellRendererParams<Candidate>) => (
+          <div className="flex h-full items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              {getCandidateInitials(params.data?.name ?? '')}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-900">{params.value}</div>
+              <div className="truncate text-xs text-slate-500">{params.data?.email}</div>
+            </div>
           </div>
-          <span className="font-semibold text-slate-900">{params.value}</span>
-        </div>
-      )
-    },
-    { field: 'role', headerName: 'Applied Role', flex: 1.5 },
-    { 
-      field: 'status', 
-      headerName: 'Status',
-      flex: 1,
-      cellRenderer: (params: ICellRendererParams) => {
-        const styles: Record<CandidateStatus, string> = {
-          Applied: 'bg-blue-50 text-blue-600',
-          Screening: 'bg-amber-50 text-amber-600',
-          Interviewing: 'bg-purple-50 text-purple-600',
-          Offered: 'bg-indigo-50 text-indigo-600',
-          Rejected: 'bg-rose-50 text-rose-600',
-          Hired: 'bg-emerald-50 text-emerald-600',
-        };
-        const status = params.value as CandidateStatus;
-        return (
-          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${styles[status] || 'bg-slate-50'}`}>
-            {status}
-          </span>
-        );
-      }
-    },
-    { field: 'experience', headerName: 'Exp (Yrs)', flex: 0.8 },
-    { field: 'location', headerName: 'Location', flex: 1 },
-    {
-      headerName: 'Actions',
-      flex: 0.8,
-      sortable: false,
-      filter: false,
-      cellRenderer: (params: ICellRendererParams) => (
-        <div className="flex items-center gap-2 h-full">
-          <button 
-            onClick={() => router.push(`/candidates/${params.data._id}`)}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-all"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={async () => {
-              if (confirm('Are you sure you want to delete this candidate?')) {
-                await deleteCandidate(params.data._id);
-                setDeletedIds((prev) => [...prev, params.data._id]);
-              }
-            }}
-            className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      )
-    }
-  ], [router]);
+        ),
+      },
+      { field: 'role', headerName: 'Applied Role', flex: 1.6 },
+      {
+        field: 'status',
+        headerName: 'Status',
+        flex: 1,
+        cellRenderer: (params: ICellRendererParams<Candidate>) => {
+          const styles: Record<CandidateStatus, string> = {
+            Applied: 'bg-blue-50 text-blue-600',
+            Screening: 'bg-amber-50 text-amber-600',
+            Interviewing: 'bg-purple-50 text-purple-600',
+            Offered: 'bg-indigo-50 text-indigo-600',
+            Rejected: 'bg-rose-50 text-rose-600',
+            Hired: 'bg-emerald-50 text-emerald-600',
+          };
+          const currentStatus = params.value as CandidateStatus;
+          return (
+            <span
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                styles[currentStatus] ?? 'bg-slate-50 text-slate-600'
+              }`}
+            >
+              {currentStatus}
+            </span>
+          );
+        },
+      },
+      { field: 'experience', headerName: 'Exp (Yrs)', flex: 0.8 },
+      { field: 'location', headerName: 'Location', flex: 1 },
+      {
+        headerName: 'Actions',
+        flex: 0.9,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<Candidate>) => {
+          const candidateId = params.data?._id;
 
-  const defaultColDef = useMemo(() => ({
-    sortable: true,
-    filter: true,
-    resizable: true,
-  }), []);
+          return (
+            <div className="flex h-full items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!candidateId) {
+                    return;
+                  }
+
+                  setSelectedCandidateId(candidateId);
+                  router.push(`/candidates/${candidateId}`);
+                }}
+                className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!candidateId) {
+                    return;
+                  }
+
+                  if (confirm('Are you sure you want to delete this candidate?')) {
+                    deleteMutation.mutate(candidateId);
+                  }
+                }}
+                className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [deleteMutation, router, setSelectedCandidateId]
+  );
+
+  const defaultColDef = useMemo(
+    () => ({
+      sortable: true,
+      filter: true,
+      resizable: true,
+    }),
+    []
+  );
+
+  if (isError) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+        {error instanceof Error ? error.message : 'Failed to load candidates.'}
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm ag-theme-alpine w-full">
-      <AgGridReact
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ag-theme-alpine w-full dark:border-slate-800 dark:bg-slate-900">
+      <AgGridReact<Candidate>
         theme="legacy"
         rowData={rowData}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
-        animateRows={true}
+        animateRows
+        loading={isLoading}
         rowSelection="multiple"
-        pagination={true}
+        pagination
         paginationPageSize={10}
         paginationPageSizeSelector={[5, 10, 15]}
         domLayout="autoHeight"
+        rowHeight={60}
+        headerHeight={48}
         overlayNoRowsTemplate="No candidates found"
+        onRowClicked={(event) => {
+          const candidateId = event.data?._id;
+          if (!candidateId) {
+            return;
+          }
+
+          toggleSelectedRow(candidateId);
+        }}
+        isRowSelectable={(rowNode) => Boolean(rowNode.data?._id)}
+        rowClassRules={{
+          'ring-2 ring-indigo-200': (params) =>
+            Boolean(params.data?._id && selectedRows.includes(params.data._id)),
+        }}
       />
       <style jsx global>{`
         .ag-theme-alpine {
@@ -124,7 +239,7 @@ export default function CandidateTable({ initialData }: CandidateTableProps) {
           --ag-header-foreground-color: #64748b;
           --ag-header-cell-hover-background-color: #f8fafc;
           --ag-row-hover-color: #f8fafc;
-          --ag-selected-row-background-color: #f1f5f9;
+          --ag-selected-row-background-color: #eef2ff;
           --ag-font-size: 14px;
           --ag-font-family: inherit;
         }

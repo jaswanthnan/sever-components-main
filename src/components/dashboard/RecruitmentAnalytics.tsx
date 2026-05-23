@@ -2,12 +2,13 @@
 
 import React from 'react';
 import { 
-  AreaChart, 
-  Area, 
+  BarChart, 
+  Bar, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
+  Legend,
   ResponsiveContainer
 } from 'recharts';
 
@@ -55,7 +56,13 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   return null;
 };
 
-export default function RecruitmentAnalytics() {
+interface RecruitmentAnalyticsProps {
+  initialData?: ReadonlyArray<{ name: string; applications: number; interviews: number; hires: number }>;
+}
+
+export default function RecruitmentAnalytics({ initialData }: RecruitmentAnalyticsProps) {
+  const displayData = initialData || data;
+
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 h-full shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-8">
@@ -71,17 +78,7 @@ export default function RecruitmentAnalytics() {
 
       <div className="h-[350px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="colorApps" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorInts" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15}/>
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
+          <BarChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
             <XAxis 
               dataKey="name" 
@@ -96,25 +93,33 @@ export default function RecruitmentAnalytics() {
               tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} 
             />
             <Tooltip content={<CustomTooltip />} />
-            <Area 
-              name="Applications"
-              type="monotone" 
-              dataKey="applications" 
-              stroke="#6366f1" 
-              strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorApps)" 
+            <Legend 
+              verticalAlign="top" 
+              align="right" 
+              iconType="circle"
+              iconSize={8}
+              wrapperStyle={{ paddingBottom: 20, fontSize: 11, fontWeight: 'bold' }}
             />
-            <Area 
-              name="Interviews"
-              type="monotone" 
+            <Bar 
+              name="Hires" 
+              dataKey="hires" 
+              stackId="a" 
+              fill="#10b981" 
+            />
+            <Bar 
+              name="Interviews" 
               dataKey="interviews" 
-              stroke="#8b5cf6" 
-              strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorInts)" 
+              stackId="a" 
+              fill="#8b5cf6" 
             />
-          </AreaChart>
+            <Bar 
+              name="Applications" 
+              dataKey="applications" 
+              stackId="a" 
+              fill="#6366f1" 
+              radius={[6, 6, 0, 0]} 
+            />
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

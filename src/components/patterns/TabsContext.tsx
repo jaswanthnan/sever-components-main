@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface TabsContextType {
@@ -20,13 +22,8 @@ export const Tabs: React.FC<{ children: ReactNode; defaultValue: string }> & {
 } = ({ children, defaultValue }) => {
   const [activeTab, setActiveTab] = useState(defaultValue);
 
-  const handleTabChange = (id: string) => {
-    console.log(`%c[TabsContext]%c Active Tab ID: %c${id}`, 'color: #8b5cf6; font-weight: bold', 'color: inherit', 'color: #8b5cf6; font-weight: bold');
-    setActiveTab(id);
-  };
-
   return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab: handleTabChange }}>
+    <TabsContext.Provider value={{ activeTab, setActiveTab }}>
       <div className="w-full bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
         {children}
       </div>
@@ -46,6 +43,7 @@ const Trigger: React.FC<{ id: string; children: ReactNode }> = ({ id, children }
 
   return (
     <button
+      type="button"
       onClick={() => setActiveTab(id)}
       className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
         isActive

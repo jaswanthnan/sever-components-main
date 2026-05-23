@@ -1,54 +1,116 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X } from 'lucide-react';
+import { Filter, Search, X } from 'lucide-react';
+import { useCandidateStore } from '@/store/candidateStore';
+import type { CandidateStatusFilter } from '@/types';
 
-const statuses = ['Applied', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
+const statuses = ['Applied', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'] as const;
 
-export default function CandidateFilters() {
+interface CandidateFiltersProps {
+  initialStatus: CandidateStatusFilter;
+}
+
+export default function CandidateFilters({ initialStatus }: CandidateFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentStatus = searchParams?.get('status');
+  const searchTerm = useCandidateStore((state) => state.searchTerm);
+  const setSearchTerm = useCandidateStore((state) => state.setSearchTerm);
+  const activeFilters = useCandidateStore((state) => state.activeFilters);
+  const setFilters = useCandidateStore((state) => state.setFilters);
+  const clearFilters = useCandidateStore((state) => state.clearFilters);
+  const currentStatus = activeFilters.status?.[0] ?? (initialStatus === 'all' ? null : initialStatus);
 
-  const setFilter = (status: string | null) => {
-    const params = new URLSearchParams(searchParams?.toString());
-    if (status) {
-      params.set('status', status);
-    } else {
-      params.delete('status');
+  useEffect(() => {
+    if (initialStatus === 'all') {
+      return;
     }
-    router.push(`/candidates?${params.toString()}`);
+
+    if (activeFilters.status?.[0] !== initialStatus) {
+      setFilters({ ...activeFilters, status: [initialStatus] });
+    }
+  }, [activeFilters, initialStatus, setFilters]);
+
+  const setStatusFilter = (status: CandidateStatusFilter) => {
+    const params = new URLSearchParams(searchParams?.toString());
+
+    if (status === 'all') {
+      params.delete('status');
+      const rest = Object.fromEntries(
+        Object.entries(activeFilters).filter(([key]) => key !== 'status')
+      ) as typeof activeFilters;
+      setFilters(rest);
+    } else {
+      params.set('status', status);
+      setFilters({ ...activeFilters, status: [status] });
+    }
+
+    const query = params.toString();
+    router.push(query ? `/candidates?${query}` : '/candidates');
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
+    <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
-          <Filter className="w-4 h-4 text-indigo-600" />
+          <Filter className="h-4 w-4 text-indigo-600" />
           Filters
         </div>
-        {currentStatus && (
-          <button 
-            onClick={() => setFilter(null)}
-            className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1"
+        {(currentStatus || searchTerm) && (
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters();
+              router.push('/candidates');
+            }}
+            className="flex items-center gap-1 text-xs font-semibold text-rose-500 hover:text-rose-600"
           >
-            <X className="w-3 h-3" /> Clear
+            <X className="h-3 w-3" /> Clear
           </button>
         )}
       </div>
 
+      <div className="space-y-2">
+        <label className="text-xs font-bold uppercase tracking-widest text-slate-400">
+          Search candidates
+        </label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Name, email, role, skill..."
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-800 outline-none transition-all focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </div>
+      </div>
+
       <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Application Status</h3>
+        <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-400">
+          Application Status
+        </h3>
         <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-all ${
+              currentStatus === null
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            All statuses
+          </button>
           {statuses.map((status) => (
             <button
               key={status}
-              onClick={() => setFilter(status)}
-              className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                currentStatus === status 
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" 
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-all ${
+                currentStatus === status
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800'
               }`}
             >
               {status}
@@ -57,11 +119,17 @@ export default function CandidateFilters() {
         </div>
       </div>
 
-      <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Experience Level</h3>
+      <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+        <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-400">
+          Experience Level
+        </h3>
         <div className="grid grid-cols-2 gap-2">
           {['Junior', 'Mid', 'Senior', 'Lead'].map((level) => (
-            <button key={level} className="px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-indigo-600 hover:text-indigo-600 transition-all">
+            <button
+              key={level}
+              type="button"
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:border-indigo-600 hover:text-indigo-600 dark:border-slate-800 dark:text-slate-400"
+            >
               {level}
             </button>
           ))}

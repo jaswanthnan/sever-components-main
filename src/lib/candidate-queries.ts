@@ -1,13 +1,21 @@
-import type { Candidate } from '@/types';
+import { candidateApi } from '@/lib/api/candidates';
+import type { CandidateStatusFilter } from '@/types';
 
 export const candidateQueryKeys = {
   all: ['candidates'] as const,
-  list: (status: string) => ['candidates', status] as const,
+  list: (status: CandidateStatusFilter) => ['candidates', status] as const,
   detail: (id: string) => ['candidate', id] as const,
 };
 
-export function getCandidateStatusParam(status?: string | string[]) {
-  return typeof status === 'string' && status.length > 0 ? status : 'all';
+export function getCandidateStatusParam(status?: string | string[]): CandidateStatusFilter {
+  if (
+    typeof status === 'string' &&
+    ['Applied', 'Screening', 'Interviewing', 'Offered', 'Rejected', 'Hired'].includes(status)
+  ) {
+    return status as CandidateStatusFilter;
+  }
+
+  return 'all';
 }
 
 export function getCandidateInitials(name: string) {
@@ -19,29 +27,10 @@ export function getCandidateInitials(name: string) {
     .slice(0, 2);
 }
 
-export async function fetchCandidates(status: string) {
-  const searchParams = new URLSearchParams();
-
-  if (status !== 'all') {
-    searchParams.set('status', status);
-  }
-
-  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
-  const response = await fetch(`/api/candidates${suffix}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch candidates');
-  }
-
-  return (await response.json()) as Candidate[];
+export async function fetchCandidates(status: CandidateStatusFilter) {
+  return candidateApi.list({ status });
 }
 
 export async function fetchCandidateById(id: string) {
-  const response = await fetch(`/api/candidates/${id}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch candidate details');
-  }
-
-  return (await response.json()) as Candidate;
+  return candidateApi.detail(id);
 }

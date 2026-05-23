@@ -19,7 +19,13 @@ const statusStyles: Record<CandidateStatus, string> = {
   Hired: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400',
 };
 
-export default function RecentCandidates() {
+interface RecentCandidatesProps {
+  initialCandidates?: ReadonlyArray<{ name: string; role: string; status: CandidateStatus; image: string }>;
+}
+
+export default function RecentCandidates({ initialCandidates }: RecentCandidatesProps) {
+  const displayCandidates = initialCandidates || candidates;
+
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 h-full">
       <div className="flex items-center justify-between mb-8">
@@ -28,10 +34,10 @@ export default function RecentCandidates() {
       </div>
 
       <div className="space-y-6">
-        {candidates.map((candidate, i) => (
+        {displayCandidates.map((candidate, i) => (
           <div key={i} className="flex items-center justify-between group cursor-pointer">
             <div className="flex items-center gap-4">
-              <div className="h-11 w-11 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-900 dark:text-white font-bold group-hover:bg-indigo-600 group-hover:text-white transition-all">
+              <div className="h-11 w-11 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-900 dark:text-white font-bold group-hover:bg-indigo-600 group-hover:text-white transition-all animate-in fade-in duration-300">
                 {candidate.image}
               </div>
               <div>

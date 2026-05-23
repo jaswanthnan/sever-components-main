@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Library,
   Users,
   Briefcase,
   Search,
@@ -18,6 +19,7 @@ const navigation = [
   { name: 'Candidates', href: '/candidates', icon: Users },
   { name: 'Jobs', href: '/jobs', icon: Briefcase },
   { name: 'Search', href: '/search', icon: Search },
+  { name: 'Learning Lab', href: '/learning-lab', icon: Library },
 ];
 
 export default function Sidebar() {

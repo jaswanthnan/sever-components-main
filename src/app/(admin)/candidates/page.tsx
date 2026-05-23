@@ -1,19 +1,15 @@
-import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
-import dbConnect from '@/lib/mongodb';
-import Candidate from '@/lib/models/Candidate';
-import CandidateTable from '@/components/candidates/CandidateTable';
-import CandidateFilters from '@/components/candidates/CandidateFilters';
-import { Plus } from 'lucide-react';
 import Link from 'next/link';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { HydrationBoundary, dehydrate } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
+import Candidate from '@/lib/models/Candidate';
+import dbConnect from '@/lib/mongodb';
+import CandidateFilters from '@/components/candidates/CandidateFilters';
+import CandidateTable from '@/components/candidates/CandidateTable';
+import { candidateQueryKeys, getCandidateStatusParam } from '@/lib/candidate-queries';
+import { getQueryClient } from '@/lib/react-query';
 import type { Candidate as CandidateRecord } from '@/types';
 
-/**
- * 📌 Metadata API — Admin page (noindex)
- * Prevents Google from indexing the private candidate management panel.
- * HOW TO SEE: View page source → <meta name="robots" content="noindex,nofollow">
- */
 export const metadata: Metadata = {
   title: 'Candidates',
   robots: {
@@ -22,90 +18,59 @@ export const metadata: Metadata = {
   },
 };
 
-// 1. Beautiful Shadcn-style Loading Placeholder for the Table
-function CandidatesTableSkeleton() {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm w-full animate-in fade-in duration-300">
-      {/* Table Header Row Skeleton */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-4 w-20" />
-      </div>
-      {/* Row Skeletons */}
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-center justify-between py-3 border-b border-slate-50 dark:border-slate-800/50 last:border-0">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <Skeleton className="h-4 w-36" />
-          </div>
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-6 w-20 rounded-full" />
-          <div className="flex gap-2">
-            <Skeleton className="h-8 w-8 rounded-lg" />
-            <Skeleton className="h-8 w-8 rounded-lg" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+function serializeCandidates(candidates: CandidateRecord[]) {
+  return JSON.parse(JSON.stringify(candidates)) as CandidateRecord[];
 }
 
-// 2. Data Fetching Server Component (Nested inside Suspense)
-type CandidateSearchParams = {
-  status?: string | string[];
-};
-
-async function CandidateTableWrapper({ params }: { params: CandidateSearchParams }) {
-  await dbConnect();
-  
-  // Artificial delay to let you see the beautiful React Suspense Streaming in action!
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  const query: Record<string, string> = {};
-  if (typeof params.status === 'string') {
-    query.status = params.status;
-  }
-
-  const candidates = await Candidate.find(query).sort({ createdAt: -1 }).lean<CandidateRecord[]>();
-
-  return <CandidateTable initialData={JSON.parse(JSON.stringify(candidates))} />;
-}
-
-// 3. Main Page Shell (Renders Instantly without waiting for DB)
 export default async function CandidatesPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
+  const status = getCandidateStatusParam(params.status);
+
+  await dbConnect();
+
+  const queryClient = getQueryClient();
+  const query = status === 'all' ? {} : { status };
+  const candidates = serializeCandidates(
+    await Candidate.find(query).sort({ createdAt: -1 }).lean<CandidateRecord[]>()
+  );
+
+  queryClient.setQueryData(candidateQueryKeys.list(status), candidates);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Link
-          href="/candidates/new"
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-semibold transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95"
-        >
-          <Plus className="w-5 h-5" />
-          Add Candidate
-        </Link>
-      </div>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+              Candidates
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Server-prefetched candidate data hydrated into TanStack Query on the client.
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Filters load instantly */}
-        <div className="lg:col-span-1">
-          <CandidateFilters />
+          <Link
+            href="/candidates/new"
+            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-2.5 font-semibold text-white shadow-lg shadow-indigo-200 transition-all active:scale-95 hover:bg-indigo-700 dark:shadow-none"
+          >
+            <Plus className="h-5 w-5" />
+            Add Candidate
+          </Link>
         </div>
-        
-        {/* Table streams in asynchronously under React Suspense boundary */}
-        <div className="lg:col-span-3">
-          <Suspense fallback={<CandidatesTableSkeleton />} key={params.status?.toString()}>
-            <CandidateTableWrapper params={params} />
-          </Suspense>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+          <div className="lg:col-span-1">
+            <CandidateFilters initialStatus={status} />
+          </div>
+          <div className="lg:col-span-3">
+            <CandidateTable status={status} />
+          </div>
         </div>
       </div>
-    </div>
+    </HydrationBoundary>
   );
 }
